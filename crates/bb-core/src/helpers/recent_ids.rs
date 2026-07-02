@@ -15,9 +15,13 @@ pub struct RecentIds {
 }
 
 impl RecentIds {
+    /// `cap` is clamped to at least 1. A zero capacity would evict every id
+    /// the instant it is inserted — silently disabling dedup and reintroducing
+    /// the double-count it exists to prevent — so we coerce it, matching the
+    /// `.max(1)` guard `TickFeed` and `Volatility` use for degenerate sizes.
     #[must_use]
     pub fn new(cap: usize) -> Self {
-        Self { set: HashSet::new(), order: VecDeque::new(), cap }
+        Self { set: HashSet::new(), order: VecDeque::new(), cap: cap.max(1) }
     }
 
     /// Record `id`; returns `true` if it's new, `false` if already seen.
@@ -45,6 +49,14 @@ mod tests {
         assert!(seen.insert("a"), "first sighting is new");
         assert!(!seen.insert("a"), "exact repeat is a duplicate");
         assert!(seen.insert("b"), "different id is new");
+    }
+
+    #[test]
+    fn recent_ids_zero_cap_is_clamped_and_still_dedups() {
+        // A zero capacity must not silently disable dedup — it's clamped to 1.
+        let mut seen = RecentIds::new(0);
+        assert!(seen.insert("a"), "first sighting is new");
+        assert!(!seen.insert("a"), "immediate repeat is still caught");
     }
 
     #[test]
